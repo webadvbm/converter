@@ -1,57 +1,67 @@
-from flask import Flask, request, send_file, jsonify
+from flask import Flask, request, send_file, jsonify, Response
+from urllib.parse import quote
 import yt_dlp
 import os
-import re
+import uuid
+import traceback
 
 app = Flask(__name__)
 
-def sanitize_filename(name):
-    # Scoate caractere ilegale din nume de fișier
-    return re.sub(r'[\\/*?:"<>|]', "", name)
-
-@app.route("/convert", methods=["POST"])
+@app.route('/convert', methods=['POST'])
 def convert():
-    data = request.get_json()
-    url = data.get("url")
-    format_requested = data.get("format", "mp3").lower()  # mp3 sau mp4
+    data = request.json
+    url = data.get('url')
     if not url:
-        return jsonify({"error": "URL lipsă"}), 400
+        return jsonify({'error': 'URL missing'}), 400
 
-    if format_requested not in ("mp3", "mp4"):
-        return jsonify({"error": "Format necunoscut"}), 400
+    output_dir = '/tmp'
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # Template pentru numele fi╚Öierului (doar titlul video)
+    outtmpl = os.path.join(output_dir, '%(title)s.%(ext)s')
+
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': outtmpl,
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+        'quiet': False,
+         'ffmpeg_location': '/usr/bin/ffmpeg',
+        'no_warnings': True,
+        'forcefilename': True,
+        'cookiefile': 'cookies.txt',
+    }
 
     try:
-        output_template = "/tmp/%(title)s.%(ext)s"
-
-        ydl_opts = {
-            'format': 'bestaudio/best' if format_requested == "mp3" else 'bestvideo+bestaudio/best',
-            'outtmpl': output_template,
-            'quiet': True,
-            'cookiefile': 'cookies.txt',  # asigură-te că există în container
-            'postprocessors': [],
-        }
-
-        if format_requested == "mp3":
-            ydl_opts['postprocessors'] = [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }]
-
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            print(f"Descarc audio de la URL: {url}")
             info = ydl.extract_info(url, download=True)
-            title = info.get("title", "file")
-            sanitized_title = sanitize_filename(title)
-            extension = "mp3" if format_requested == "mp3" else info.get("ext", "mp4")
-            file_path = f"/tmp/{sanitized_title}.{extension}"
 
-        if not os.path.exists(file_path):
-            return jsonify({"error": f"Fișierul {file_path} nu a fost creat"}), 500
+        # Preg─âtim numele fi╚Öierului mp3
+        filename = ydl.prepare_filename(info)
+        mp3_file = os.path.splitext(filename)[0] + '.mp3'
 
-        return send_file(file_path, as_attachment=True, download_name=f"{sanitized_title}.{extension}")
+        if not os.path.isfile(mp3_file):
+            return jsonify({'error': 'MP3 file not found after conversion'}), 500
+
+        print(f"Trimit fiserul: {mp3_file}")
+
+        file_name_only = os.path.basename(mp3_file)
+
+        response = send_file(mp3_file, as_attachment=True)
+        filename_encoded = quote(file_name_only)
+        response.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{filename_encoded}"
+        return response
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print("EROARE LA DESCARCARE:")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080) 
