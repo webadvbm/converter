@@ -1,5 +1,1 @@
-# Netscape HTTP Cookie File
-
-.youtube.com	TRUE	/	TRUE	1767037560	VISITOR_PRIVACY_METADATA	CgJSTxIhEh0SGwsMDg8QERITFBUWFxgZGhscHR4fICEiIyQlJiBs
-.youtube.com	TRUE	/	TRUE	1786045565	PREF	tz=Europe.Bucharest&f5=20000
-.youtube.com	TRUE	/	TRUE	1767037560	VISITOR_INFO1_LIVE	-ciqa7Ed0Pc
+--extractor-args "youtubetab:skip=webpage" --extractor-args "youtube:player_skip=webpage,configs;visitor_data=CgJSTxIhEh0SGwsMDg8QERITFBUWFxgZGhscHR4fICEiIyQlJiBs"
